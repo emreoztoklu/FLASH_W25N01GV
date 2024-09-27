@@ -217,7 +217,7 @@ uint32_t W25nxx_SectorToBlock(uint32_t SectorAddr);
 uint32_t W25nxx_SectorToPage(uint32_t SectorAddr);
 uint32_t W25nxx_BlockToPage(uint32_t BlockAddr);
 /*********************************************************/
-uint8_t W25nxx_Read_SR(uint8_t noSR);
+uint8_t W25nxx_Read_SR(Status_Reg_t noSR);
 void W25nxx_CheckStatusRegisters(void);
 void W25nxx_DeviceReset(void);
 uint32_t W25nxx_ReadID(void);

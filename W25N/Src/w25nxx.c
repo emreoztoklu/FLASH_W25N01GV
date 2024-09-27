@@ -8,6 +8,7 @@
  *****************************************************************/
 
 /*********************  INCLUDES *********************/
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -17,9 +18,19 @@
 #include "../../../Peripherals/eo_tim.h"
 #include "../../../Peripherals/eo_usart.h"
 
-#if(_W25NXX_DEBUG == 1)
-#include <stdio.h>
+#define _W25NXX_DEBUG_MODE
+
+#ifdef _W25NXX_DEBUG_MODE
+#define _W25NXX_DEBUG_INFO(fmt, ...) \
+    do { printf("DEBUG: " fmt, __VA_ARGS__); } while (0)
+
+#define _W25NXX_DEBUG_ERROR(fmt, ...) \
+    do { fprintf(stderr, "ERROR: " fmt, __VA_ARGS__); } while (0)
+#else
+#define _W25NXX_DEBUG_ERROR(fmt, ...)
+#define _W25NXX_ERROR_ERROR(fmt, ...)
 #endif
+
 
 #define PUBLIC
 #define PRIVATE static
@@ -32,42 +43,74 @@ w25nxx_t _w25nxx;
 
 /**************************************************************************************/
 PRIVATE W25_RESULT_t W25N_WriteSpi(uint8_t *Txdata, uint16_t size){
-	if(HAL_SPI_Transmit((SPI_HandleTypeDef *)&_W25NXX_SPI, Txdata, size, 500) == HAL_ERROR)
+
+	W25N_SELECT;
+	if(HAL_SPI_Transmit((SPI_HandleTypeDef *)&_W25NXX_SPI, Txdata, size, 500) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_Transmit\r\n");
 		return W25_ERROR;
+	}
+	W25N_DESELECT;
 	return W25_OK;
 }
 
 
 
 PRIVATE W25_RESULT_t W25N_ReadSpi(uint8_t *Rxdata, uint16_t size){
-	if(HAL_SPI_Receive((SPI_HandleTypeDef *)&_W25NXX_SPI, Rxdata, size, 500) == HAL_ERROR)
+
+	W25N_SELECT;
+	if(HAL_SPI_Receive((SPI_HandleTypeDef *)&_W25NXX_SPI, Rxdata, size, 500) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_Receive\r\n");
 		return W25_ERROR;
+	}
+	W25N_SELECT;
 	return W25_OK;
 }
 
 
 
 PRIVATE W25_RESULT_t W25N_WriteReadSpi(uint8_t Txdata, uint8_t *Rxdata, uint16_t size){
-	if(HAL_SPI_TransmitReceive((SPI_HandleTypeDef *)&_W25NXX_SPI, &Txdata, Rxdata, size, 500) == HAL_ERROR)
+	W25N_SELECT;
+	if(HAL_SPI_TransmitReceive((SPI_HandleTypeDef *)&_W25NXX_SPI, &Txdata, Rxdata, size, 500) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_TransmitReceive\r\n");
 		return W25_ERROR;
+	}
+	W25N_SELECT;
 	return W25_OK;
 }
 
 PRIVATE W25_RESULT_t W25N_ReadSpiDMA(uint8_t *Rxdata, uint16_t size){
-	if(HAL_SPI_Receive_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, Rxdata, size) == HAL_ERROR)
+	W25N_SELECT;
+	if(HAL_SPI_Receive_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, Rxdata, size) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_Receive_DMA\r\n");
 		return W25_ERROR;
+	}
+	W25N_SELECT;
 	return W25_OK;
 }
 
 PRIVATE W25_RESULT_t W25N_WriteSpiDMA(uint8_t *Txdata, uint16_t size){
-	if(HAL_SPI_Transmit_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, Txdata, size) == HAL_ERROR)
+	W25N_SELECT;
+	if(HAL_SPI_Transmit_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, Txdata, size) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_Transmit_DMA\r\n");
 		return W25_ERROR;
+	}
+	W25N_SELECT;
 	return W25_OK;
 }
 
 PRIVATE W25_RESULT_t W25N_WriteReadSpiDMA(uint8_t Txdata, uint8_t *Rxdata, uint16_t size){
-	if(HAL_SPI_TransmitReceive_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, &Txdata, Rxdata, size) == HAL_ERROR)
+	W25N_SELECT;
+	if(HAL_SPI_TransmitReceive_DMA((SPI_HandleTypeDef *)&_W25NXX_SPI, &Txdata, Rxdata, size) == HAL_ERROR){
+		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("HAL_SPI_TransmitReceive_DMA\r\n");
 		return W25_ERROR;
+	}
+	W25N_SELECT;
 	return W25_OK;
 }
 
@@ -118,7 +161,7 @@ PUBLIC uint32_t W25nxx_BlockToPage(uint32_t BlockAddr){
 
 }
 /**************************************************************************************/
-PUBLIC uint8_t W25nxx_Read_SR(uint8_t noSR){
+PUBLIC uint8_t W25nxx_Read_SR(Status_Reg_t noSR){
 
 	uint8_t status = 0;
 	uint8_t rx = 0;
@@ -126,13 +169,11 @@ PUBLIC uint8_t W25nxx_Read_SR(uint8_t noSR){
 							{READ_STATUS_REGISTER, SR2_CONFIG_REG, W25N_DUMMY_BYTE },
 							{READ_STATUS_REGISTER, SR3_STAT_REG, W25N_DUMMY_BYTE}};
 
-	W25N_SELECT;
 	for(int i = 0; i < 3; i++){
 		if ((status = W25N_WriteReadSpi(cmdbuf[noSR-1][i], &rx, 1)) != W25_OK){
 			return status;
 		}
 	}
-	W25N_DESELECT;
 
 	switch (noSR) {
 		case Prot_Reg:
@@ -159,9 +200,7 @@ PUBLIC void W25nxx_CheckStatusRegisters(void){
 PRIVATE void W25nxx_WaitForReady(void){
 	do{
 		if (W25nxx_Read_SR(Stat_reg)!= W25_OK){
-#if(_W25NXX_DEBUG == 1)
-		printf("Error: W25nxx_Read_SR");
-#endif
+			_W25NXX_DEBUG_ERROR("W25nxx_Read_SR\r\n");
 		}
 	}while(_w25nxx.flash_SR.SR3 & SR3_S0_BUSY);
 }
@@ -169,11 +208,10 @@ PRIVATE void W25nxx_WaitForReady(void){
 PUBLIC void W25nxx_DeviceReset(void){
 	//W25nxx_WaitForReady(); 			// its recommended to check BUSY bit before restart
 	uint8_t cmd = DEVICE_RESET;
-	W25N_SELECT;
+
 	if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("W25nxx_DeviceReset\r\n");
 	}
-	W25N_DESELECT;
 	W25N_Delayus(600);  				//the device will take approximately tRST to reset,
 										//depending on the current operation the device is performing, tRST can be 5us~500us.
 										//During this period, no command will be accepted.
@@ -184,15 +222,15 @@ PUBLIC void W25nxx_DeviceReset(void){
 PRIVATE void W25nxx_Write_SR(uint8_t noSR, uint8_t data){
 	uint8_t cmd = WRITE_STATUS_REGISTER;
 
-	W25N_SELECT;
+	
 	if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("W25nxx_Write_SR\r\n");
 	}
 
 	if(noSR == Prot_Reg){
 		cmd = SR1_PROT_REG;
 		if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-			W25N_DESELECT;
+			_W25NXX_DEBUG_ERROR("W25nxx_Write_SR1_PROT_REG\r\n");
 		}
 		_w25nxx.flash_SR.SR1 = data;
 	}
@@ -200,7 +238,7 @@ PRIVATE void W25nxx_Write_SR(uint8_t noSR, uint8_t data){
 	else if(noSR == Config_reg){
 		cmd = SR2_CONFIG_REG;
 		if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-			W25N_DESELECT;
+			_W25NXX_DEBUG_ERROR("W25nxx_Write_SR2_CONFIG_REG\r\n");
 		}
 		_w25nxx.flash_SR.SR2 = data;
 	}
@@ -208,55 +246,56 @@ PRIVATE void W25nxx_Write_SR(uint8_t noSR, uint8_t data){
 	else{
 		cmd = SR3_STAT_REG;
 		if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-			W25N_DESELECT;
+			_W25NXX_DEBUG_ERROR("W25nxx_Write_SR3_STAT_REG\r\n");
 		}
 		_w25nxx.flash_SR.SR3 = data;
 	}
 
 	if(W25N_WriteSpi((uint8_t*)&data, 1)!= W25_OK){
-		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("W25nxx_Write_Data\r\n");
 	}
-	W25N_DESELECT;
 }
 
 PRIVATE W25_RESULT_t W25nxx_WriteEnable(void){
 	uint8_t status = 0;
 	uint8_t cmd = WRITE_ENABLE;
 
-	W25N_SELECT;
 	if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("W25nxx_WriteEnable\r\n");
 		return W25_ERROR;
 	}
-	W25N_DESELECT;
+
 	W25N_Delayus(500);     //W25N_Delayms(1);
 
-	if ((status = W25nxx_Read_SR(3)) != W25_OK)
-		return W25_ERROR;
-
-	if(_w25nxx.flash_SR.SR3 & SR3_S1_WEL)
-		return W25_OK;
-	else
-		return W25_ERROR;
+	if ((status = W25nxx_Read_SR(Stat_reg)) == W25_OK){
+		if (0x00  == (_w25nxx.flash_SR.SR3 & SR3_S1_WEL)){
+			return W25_OK;
+		}else{
+			_W25NXX_DEBUG_ERROR("_w25nxx.flash_SR.SR3\r\n");
+			return W25_ERROR;
+		}
+	}
 }
 
 PRIVATE W25_RESULT_t W25nxx_WriteDisable(void){
 	uint8_t status = 0;
 	uint8_t cmd = WRITE_DISABLE;
 
-	W25N_SELECT;
 	if(W25N_WriteSpi((uint8_t*)&cmd, 1)!= W25_OK){
-		W25N_DESELECT;
+		_W25NXX_DEBUG_ERROR("W25nxx_WriteDisable\r\n");
 		return W25_ERROR;
 	}
-	W25N_DESELECT;
+
 	W25N_Delayus(500);     //W25N_Delayms(1);
 
-	if ((status = W25nxx_Read_SR(3)) == W25_OK){
-		if ((_w25nxx.flash_SR.SR3 & SR3_S1_WEL) == 0x00)
+	if ((status = W25nxx_Read_SR(Stat_reg)) == W25_OK){
+		if (0x00  == (_w25nxx.flash_SR.SR3 & SR3_S1_WEL)){
 			return W25_OK;
+		}else{
+			_W25NXX_DEBUG_ERROR("_w25nxx.flash_SR.SR3\r\n");
+			return W25_ERROR;
+		}
 	}
-	return W25_ERROR;
 }
 
 PRIVATE W25_RESULT_t W25nxx_BlockErase(uint16_t pageAddr){
@@ -268,28 +307,21 @@ PRIVATE W25_RESULT_t W25nxx_BlockErase(uint16_t pageAddr){
 		return W25_ERROR;
 
 	char cmdbuf[4] = {BLOCK_ERASE_128KB, W25N_DUMMY_BYTE, ((pageAddr & 0xFF00) >> 8), (pageAddr & 0xFF)};
-
-#if(_W25NXX_DEBUG == 1)
-	//printf("w25nxx EraseBlock %d Started...\r\n", (int)pageAddr);
-	//uint32_t StartTime = HAL_GetTick();
-#endif
+	_W25NXX_DEBUG_INFO("w25nxx EraseBlock %d Started...\r\n", (int)pageAddr);
+	uint32_t StartTime = W25N_GetTick;
 
 	W25nxx_WaitForReady();
 
 	if(!W25nxx_WriteEnable()){
-		W25N_SELECT;
+
 		if(W25N_WriteSpi((uint8_t*)cmdbuf, 4)!= W25_OK){
-			W25N_DESELECT;
+			_W25NXX_DEBUG_ERROR("W25nxx_BlockErase\r\n");
 			return W25_ERROR;
 		}
-		W25N_DESELECT;
+		
 		W25N_Delayms(20);  //Tbe = 10ms
-
-#if(_W25NXX_DEBUG == 1)
-	//	printf("w25nxx EraseBlock done after %d ms\r\n", (int)(W25N_GetTick - StartTime));
+		_W25NXX_DEBUG_INFO("w25nxx EraseBlock done after %d ms\r\n", (int)(W25N_GetTick - StartTime));
 		W25N_Delayms(10);
-#endif
-
 		W25N_Delayms(1);	 // W25N_Delayus(300); //W25N_Delayms(1);
 		_w25nxx.Lock = 0;
 		/*
@@ -298,6 +330,7 @@ PRIVATE W25_RESULT_t W25nxx_BlockErase(uint16_t pageAddr){
 		*/
 	}
 	else{
+		_W25NXX_DEBUG_ERROR("W25nxx_BlockErase\r\n");
 		return W25_ERROR;
 	}
 	return W25_OK;
@@ -306,16 +339,12 @@ PRIVATE W25_RESULT_t W25nxx_BlockErase(uint16_t pageAddr){
 //section: 8.2.11   LoadProg :0  / Random_Load: 1
 PRIVATE W25_RESULT_t W25nxx_LoadProgOrRandomLoadData(uint16_t columnAddr, uint8_t* dataArr, uint32_t lenght , LoadRandLoad_t loadtype){
 	if(columnAddr >= (uint32_t)(_w25nxx.PageSize)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorColumn Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
-#endif
+		_W25NXX_DEBUG_ERROR("Column Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
 		return W25_ERROR;
 	}
 
 	if(lenght > (uint32_t)(_w25nxx.PageSize - columnAddr)){
-#if(_W25NXX_DEBUG == 1)
-		printf("Errorlenght: SR2_BUF:1 ReadMode 2112 __SR2_BUF:0 ContinuosRead 2048 and %d\r\n",(int)lenght);
-#endif
+		_W25NXX_DEBUG_ERROR("Lenght SR2_BUF:1 ReadMode 2112 __SR2_BUF:0 ContinuosRead 2048 and %d\r\n",(int)lenght);
 		return W25_ERROR;
 	}
 
@@ -329,18 +358,16 @@ PRIVATE W25_RESULT_t W25nxx_LoadProgOrRandomLoadData(uint16_t columnAddr, uint8_
 	W25nxx_WaitForReady();
 
 	if (!W25nxx_WriteEnable()){
-		W25N_SELECT;
-		if(W25N_WriteSpi(cmdbuf, 3)!= W25_OK){
-			W25N_DESELECT;
+		
+		if(W25N_WriteSpi(cmdbuf, sizeof(cmdbuf))!= W25_OK){
 			return W25_ERROR;
 		}
 		else {
 			if (W25N_WriteSpi(dataArr, lenght)!= W25_OK){
-				W25N_DESELECT;
 				return W25_ERROR;
 			}
 		}
-		W25N_DESELECT;
+		
 	}
 	return W25_OK;
 	//8.2.11 Load Program Data (02h) / Random Load Program Data (84h)
@@ -350,9 +377,7 @@ PRIVATE W25_RESULT_t W25nxx_LoadProgOrRandomLoadData(uint16_t columnAddr, uint8_
 
 PRIVATE W25_RESULT_t W25nxx_ProgramExecute(uint32_t pageAddr){
 	if(pageAddr > (_w25nxx.PageCount-1)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorPage Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
-#endif
+		_W25NXX_DEBUG_ERROR("Page Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
 		return W25_ERROR;
 	}
 
@@ -360,14 +385,9 @@ PRIVATE W25_RESULT_t W25nxx_ProgramExecute(uint32_t pageAddr){
 
 	W25nxx_WaitForReady();
 
-	W25N_SELECT;
-
-	if(W25N_WriteSpi((uint8_t*)cmdbuf, 4)!= W25_OK){
-		W25N_DESELECT;
+	if(W25N_WriteSpi((uint8_t*)cmdbuf, sizeof(cmdbuf))!= W25_OK){
 		return W25_ERROR;
 	}
-
-	W25N_DESELECT;
 
 	W25N_Delayus(700);	//tppmax = 700us  typy: 250us
 
@@ -376,9 +396,7 @@ PRIVATE W25_RESULT_t W25nxx_ProgramExecute(uint32_t pageAddr){
 
 PRIVATE W25_RESULT_t W25nxx_PageDataRead(uint32_t pageAddr){
 	if(pageAddr > (_w25nxx.PageCount-1)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorPage Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
-#endif
+		_W25NXX_DEBUG_ERROR("Page Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
 		return W25_ERROR;
 	}
 
@@ -386,31 +404,23 @@ PRIVATE W25_RESULT_t W25nxx_PageDataRead(uint32_t pageAddr){
 
 	W25nxx_WaitForReady();
 
-	W25N_SELECT;
-	if(W25N_WriteSpi((uint8_t*)cmdbuf, 4)!= W25_OK){
-		W25N_DESELECT;
+	if(W25N_WriteSpi((uint8_t*)cmdbuf, sizeof(cmdbuf))!= W25_OK){
 		return W25_ERROR;
 	}
-	W25N_DESELECT;
 
 	W25N_Delayus(70);		// instruction wont accept 60us other inst.
-
 
 	return W25_OK;
 }
 
 PRIVATE W25_RESULT_t W25nxx_ReadData(uint16_t columnAddr, uint8_t* recieve_data, uint32_t lenght){
 	if(columnAddr >= (uint32_t)(_w25nxx.PageSize-1)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorColumn Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
-#endif
+		_W25NXX_DEBUG_ERROR("Column Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
 		return W25_ERROR;
 	}
 
 	if(lenght > (uint32_t)(_w25nxx.PageSize - columnAddr)){
-#if(_W25NXX_DEBUG == 1)
-		printf("Errorlenght: SR2_BUF:1 ReadMode 2112 __SR2_BUF:0 ContinuosRead 2048 and %d\r\n",(int)lenght);
-#endif
+		_W25NXX_DEBUG_ERROR("lenght: SR2_BUF:1 ReadMode 2112 __SR2_BUF:0 ContinuosRead 2048 and %d\r\n",(int)lenght);
 		return W25_ERROR;
 	}
 
@@ -431,21 +441,16 @@ PRIVATE W25_RESULT_t W25nxx_ReadData(uint16_t columnAddr, uint8_t* recieve_data,
 
 	W25nxx_WaitForReady();
 
-	W25N_SELECT;
-	if(W25N_WriteSpi((uint8_t*)cmdbuf, 4)!= W25_OK){
-		W25N_DESELECT;
+	if((status = W25N_WriteSpi((uint8_t*)cmdbuf, sizeof(cmdbuf))!= W25_OK){
 		return status;
 	}
 
 	else{
-		if(W25N_ReadSpi(recieve_data, lenght) != W25_OK){
+		if((status = W25N_ReadSpi(recieve_data, lenght)) != W25_OK){
 		//if(W25N_ReadSpiDMA(recieve_data, lenght) != W25_OK){
-			W25N_DESELECT;
 			return status;
 		}
 	}
-	W25N_DESELECT;
-
 	return W25_OK;
 }
 /**************************************************************************************/
@@ -462,21 +467,16 @@ PUBLIC W25_RESULT_t W25nxx_ChipBlockErase(uint16_t pageAddr){
 
 PUBLIC W25_RESULT_t W25nxx_ChipErase(void){
 	//Pagecount = 65536
-#if(_W25NXX_DEBUG == 1)
-	printf("W25nxx_ChipErase Started...\r\n");
+	_W25NXX_DEBUG_INFO("W25nxx_ChipErase Started...\r\n");
 	W25N_Delayms(10);
-#endif
 
 	for(uint32_t i = 0; i < (_w25nxx.PageCount-1); i+=W25_NUM_OF_PAGE_IN_BLOCK){
 		if(W25nxx_BlockErase(i))
 			return W25_ERROR;
 	}
 
-
-#if(_W25NXX_DEBUG == 1)
-	printf("w25nxx EraseBlock done %lu\r\n",_w25nxx.PageCount);
+	_W25NXX_DEBUG_INFO("w25nxx EraseBlock done %lu\r\n",_w25nxx.PageCount);
 	W25N_Delayms(10);
-#endif
 
 	return W25_OK;
 }
@@ -486,6 +486,7 @@ PUBLIC W25_RESULT_t W25nxx_PageErase(uint16_t pageno){
 	return W25nxx_WritePage(pageno, buff, 0, 0);
 }
 /**************************************************************************************/
+
 PUBLIC W25_RESULT_t W25nxx_WriteData(uint16_t columnAddr, uint32_t pageAddr, uint8_t* dataArr, uint32_t lenght){
 	uint8_t status;
 
@@ -540,21 +541,11 @@ PUBLIC W25_RESULT_t W25nxx_WritePage(uint32_t pageAddr,  uint8_t* dataArr, uint3
 	while(_w25nxx.Lock == 1)
 		W25N_Delayms(1);
 	_w25nxx.Lock = 1;
-
-#if(_W25NXX_DEBUG == 1)
-	printf("W25N WritePage: %lu, Offset:%lu, Write %lu Bytes,begin \r\n", pageAddr, offset, NByteWrtup2PageSiz);
-	W25N_Delayms(10);
+	_W25NXX_DEBUG_INFO("W25N WritePage: %lu, Offset:%lu, Write %lu Bytes,begin \r\n", pageAddr, offset, NByteWrtup2PageSiz);
 	uint32_t StartTime = W25N_GetTick;
-#endif
-
 	W25nxx_WriteData(SECTOR0_COL_ADDRESS, pageAddr, dataArr, NByteWrtup2PageSiz);
+	_W25NXX_DEBUG_INFO("W25N WritePage done after %d ms\r\n", (int)(W25N_GetTick - StartTime));
 
-
-#if(_W25NXX_DEBUG == 1)
-	StartTime = W25N_GetTick - StartTime;
-	printf("W25N WritePage done after %d ms\r\n", (int)StartTime);
-	W25N_Delayms(10);
-#endif
 	W25N_Delayms(1);
 	_w25nxx.Lock = 0;
 
@@ -564,17 +555,11 @@ PUBLIC W25_RESULT_t W25nxx_WritePage(uint32_t pageAddr,  uint8_t* dataArr, uint3
 PUBLIC W25_RESULT_t W25nxx_WriteSector2(uint32_t sector, const uint8_t* dataArr, uint32_t offset, uint32_t NByteWrtup2SecSiz){
 	if((NByteWrtup2SecSiz > _w25nxx.SectorSize) || (NByteWrtup2SecSiz == 0)){
 		NByteWrtup2SecSiz = _w25nxx.SectorSize;
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteSector: %lu, Offset:%lu, Write %lu Bytes,begin \r\n", sector, offset, NByteWrtup2SecSiz);
-		W25N_Delayms(10);
-#endif
+		_W25NXX_DEBUG_INFO("W25N WriteSector: %lu, Offset:%lu, Write %lu Bytes,begin \r\n", sector, offset, NByteWrtup2SecSiz);
 	}
 
 	if(offset >=_w25nxx.SectorSize){
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteSector Faild!\r\n");
-		W25N_Delayms(10);
-#endif
+		_W25NXX_DEBUG_INFO("W25N WriteSector Faild!\r\n");
 		return W25_ERROR;
 	}
 
@@ -600,28 +585,19 @@ PUBLIC W25_RESULT_t W25nxx_WriteSector2(uint32_t sector, const uint8_t* dataArr,
 
 	}while(Bytes2Write > 0);
 
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteBlockDone\r\n");
-		W25N_Delayms(10);
-#endif
+	_W25NXX_DEBUG_INFO("W25N WriteBlockDone\r\n");
 
-		return W25_OK;
+	return W25_OK;
 }
 
 PUBLIC W25_RESULT_t W25nxx_WriteBlock(uint32_t block,  uint8_t* dataArr, uint32_t offset, uint32_t NByteWrtup2BlokSiz){
 	if((NByteWrtup2BlokSiz > _w25nxx.BlockSize) || (NByteWrtup2BlokSiz == 0)){
 		NByteWrtup2BlokSiz = _w25nxx.BlockSize;
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteBlock: %lu, Offset:%lu, Write %lu Bytes,begin..\r\n", block, offset, NByteWrtup2BlokSiz);
-		W25N_Delayms(10);
-#endif
+		_W25NXX_DEBUG_INFO("W25N WriteBlock: %lu, Offset:%lu, Write %lu Bytes,begin..\r\n", block, offset, NByteWrtup2BlokSiz);
 	}
 
 	if(offset >=_w25nxx.BlockSize){
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteBlock Faild!\r\n");
-		W25N_Delayms(10);
-#endif
+		_W25NXX_DEBUG_ERROR("W25N WriteBlock Faild!\r\n");
 		return W25_ERROR;
 	}
 
@@ -646,28 +622,20 @@ PUBLIC W25_RESULT_t W25nxx_WriteBlock(uint32_t block,  uint8_t* dataArr, uint32_
 
 	}while(Bytes2Write > 0);
 
-#if(_W25NXX_DEBUG == 1)
-		printf("W25N WriteSector Done\r\n");
-		W25N_Delayms(10);
-#endif
+	_W25NXX_DEBUG_INFO("W25N WriteSector Done\r\n");
 
-		return W25_OK;
-
+	return W25_OK;
 }
 
 /***********************************************************************/
 PUBLIC W25_RESULT_t W25nxx_FastRead(uint16_t columnAddr,uint32_t pageAddr, uint8_t* data, uint32_t lenght){
 	if(pageAddr > (_w25nxx.PageCount-1)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorPage Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
-#endif
+		_W25NXX_DEBUG_ERROR("ErrorPage Addr should be between 0 and %d\r\n",(int)_w25nxx.PageCount-1);
 		return W25_ERROR;
 	}
 
 	if(columnAddr >= (uint32_t)(_w25nxx.PageSize-1)){
-#if(_W25NXX_DEBUG == 1)
-		printf("ErrorColumn Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
-#endif
+		_W25NXX_DEBUG_ERROR("ErrorColumn Addr should be between 0 and %d\r\n",(int)_w25nxx.PageSize-1);
 		return W25_ERROR;
 	}
 
@@ -703,11 +671,8 @@ PUBLIC W25_RESULT_t W25nxx_FastRead(uint16_t columnAddr,uint32_t pageAddr, uint8
 	}
 
 	if ((status = W25N_ReadSpi(data, lenght)) != W25_OK){
-		W25N_DESELECT;
 		return status;
 	}
-
-	W25N_DESELECT;
 	return W25_OK;
 }
 
@@ -728,12 +693,13 @@ PUBLIC W25_RESULT_t W25nxx_ReadByte(uint32_t sector, uint8_t *data, uint32_t len
 	else if (sector % 4 == 3)
 		columnAdrr = SECTOR3_COL_ADDRESS;
 
-	if(W25nxx_PageDataRead(pageAddr))
+	if(W25nxx_PageDataRead(pageAddr)){
 		return W25_ERROR;
+	}
 
-	if (W25nxx_ReadData(columnAdrr, data, lenght))		// Check this lenght+1
+	if (W25nxx_ReadData(columnAdrr, data, lenght)){ // Check this lenght+1
 		return W25_ERROR;
-
+	}		
 	return W25_OK;
 }
 
@@ -778,9 +744,7 @@ PUBLIC W25_RESULT_t W25nxx_FastReadSector(uint32_t sectorNo, uint8_t* data){
 }
 
 PUBLIC void W25nxx_DisplayData(uint8_t* buff, uint32_t buffsize){
-
 	for(int i = 0; i< buffsize; i++){
-#if(_W25NXX_DEBUG == 1)
 		if(!i){
 			printf("0x%08X ", 0);
 		}
@@ -790,10 +754,8 @@ PUBLIC void W25nxx_DisplayData(uint8_t* buff, uint32_t buffsize){
 				printf(" \r\n0x%08X ", i);
 		}
 		printf("0x%02X", *(uint8_t*)(buff + i));
-#endif
 	}
 	printf("\r\n");
-
 }
 
 /******************************************************************/
@@ -802,13 +764,11 @@ PUBLIC uint32_t W25nxx_ReadID(void){
 	uint8_t temp[3] = {0x00, 0x00 ,0x00};
 	uint8_t tx[2] = {READ_JEDEC_ID, W25N_DUMMY_BYTE};
 	uint8_t rx = 0;
-	W25N_SELECT;
 	W25N_WriteReadSpi(tx[0], &rx, 1);
 	W25N_WriteReadSpi(tx[1], &rx, 1);
 	W25N_WriteReadSpi(tx[1], temp, 1);
 	W25N_WriteReadSpi(tx[1], temp+1, 1);
 	W25N_WriteReadSpi(tx[1], temp+2, 1);
-	W25N_DESELECT;
 	return ((temp[0]<<16) | (temp[1]<<8)  | (temp[2]));
 }
 
@@ -847,7 +807,7 @@ W25_RESULT_t W25nxx_Init(void){
 			_w25nxx.BlockCount = W25_NUM_OF_BLOCK;
 			break;
 		default:
-			printf(">SYS:NoDevice or UnknownDevice\r\n");
+			_W25NXX_DEBUG_INFO(">SYS:NoDevice or UnknownDevice\r\n");
 			return W25_ERROR;
 	}
 	_w25nxx.PageSize 	= W25_PAGE_SIZE1;			//2048+64		//1024block x 64pages
@@ -859,27 +819,24 @@ W25_RESULT_t W25nxx_Init(void){
 	_w25nxx.CapasityMB 	= ((_w25nxx.SectorCount * _w25nxx.SectorSize)/(1024*1024));
 
 
-#if(_W25NXX_DEBUG == 1)
-	printf("**********************************************************\r\n");
-	printf(">W25Nxx: Device : %s\r\n" , _w25nxx.flashID.DeviceName);
-	printf(">W25Nxx: FlashID: 0x%04X\r\n", (int)_w25nxx.flashID.PysicalID);
-	printf(">W25Nxx: Page Size: %9d\r\n", _w25nxx.PageSize);
-	printf(">W25Nxx: Page Count: %8ld\r\n", _w25nxx.PageCount);
-	printf(">W25Nxx: Sector Size: %7ld\r\n", _w25nxx.SectorSize);
-	printf(">W25Nxx: Sector Count: %ld\r\n", _w25nxx.SectorCount);
-	printf(">W25Nxx: Block Size: %8ld\r\n", _w25nxx.BlockSize);
-	printf(">W25Nxx: Block Count: %7ld\r\n", _w25nxx.BlockCount);
-	printf(">W25Nxx: ProtectReg: 0x%02X\r\n", _w25nxx.flash_SR.SR1);
-	printf(">W25Nxx: Config.Reg: 0x%02X\r\n", _w25nxx.flash_SR.SR2);
-	printf(">W25Nxx: StatusReg : 0x%02X\r\n", _w25nxx.flash_SR.SR3);
-	printf("**********************************************************\r\n");
-#endif
+
+	_W25NXX_DEBUG_INFO("**********************************************************\r\n");
+	_W25NXX_DEBUG_INFO(">W25Nxx: FlashID: 0x%04X\r\n", (int)_w25nxx.flashID.PysicalID);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Device : %s\r\n" , _w25nxx.flashID.DeviceName);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Page Size: %9d\r\n", _w25nxx.PageSize);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Page Count: %8ld\r\n", _w25nxx.PageCount);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Sector Size: %7ld\r\n", _w25nxx.SectorSize);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Sector Count: %ld\r\n", _w25nxx.SectorCount);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Block Size: %8ld\r\n", _w25nxx.BlockSize);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Block Count: %7ld\r\n", _w25nxx.BlockCount);
+	_W25NXX_DEBUG_INFO(">W25Nxx: ProtectReg: 0x%02X\r\n", _w25nxx.flash_SR.SR1);
+	_W25NXX_DEBUG_INFO(">W25Nxx: Config.Reg: 0x%02X\r\n", _w25nxx.flash_SR.SR2);
+	_W25NXX_DEBUG_INFO(">W25Nxx: StatusReg : 0x%02X\r\n", _w25nxx.flash_SR.SR3);
+	_W25NXX_DEBUG_INFO("**********************************************************\r\n");
+
 	_w25nxx.Lock = 0;
 	return W25_OK;
 }
-
-
-
 
 
 //void W25nxx_FastRead4ByteAddr(void);
